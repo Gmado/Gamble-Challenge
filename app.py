@@ -7,7 +7,7 @@ st.set_page_config(page_title="Gaming Challenge - Live Wettbüro", page_icon="�
 @st.cache_resource
 def get_global_state():
     return {
-        "lobby_active": True, # Lobby ist jetzt standardmäßig aktiv
+        "lobby_active": True, 
         "points": {"Team 1": 7, "Team 2": 7, "Team 3": 7},
         "wetten": {"Team 1": None, "Team 2": None, "Team 3": None},
         "taken_teams": {"Team 1": None, "Team 2": None, "Team 3": None}
@@ -30,7 +30,7 @@ if "my_team" not in st.session_state and "is_admin" not in st.session_state:
         elif input_name == "":
             st.error("Bitte gib einen Namen ein!")
         else:
-            # Check 1: Ist das ein Re-Entry (Wiederverbindung)?
+            # Check 1: Wiederverbindung
             found_team = None
             for team, name in global_state["taken_teams"].items():
                 if name == input_name:
@@ -43,12 +43,11 @@ if "my_team" not in st.session_state and "is_admin" not in st.session_state:
                 st.success(f"Willkommen zurück, {input_name}! Du bist in {found_team}.")
                 st.rerun()
             else:
-                # Check 2: Normaler Erst-Login
+                # Check 2: Erst-Login
                 verfuegbare_teams = [t for t, user in global_state["taken_teams"].items() if user is None]
                 if not verfuegbare_teams:
                     st.error("Alle Teams sind bereits voll und dieser Name ist nicht für ein Re-Entry registriert!")
                 else:
-                    # Weist automatisch das erste freie Team zu
                     gewaehltes_team = verfuegbare_teams[0]
                     global_state["taken_teams"][gewaehltes_team] = input_name
                     st.session_state["my_team"] = gewaehltes_team
@@ -65,7 +64,15 @@ elif st.session_state.get("is_admin", False):
         user = global_state["taken_teams"][team]
         wette = global_state["wetten"][team]
         user_text = f"👤 Gambler: **{user}**" if user else "❌ *Niemand*"
-        wette_text = f" | 🎲 Wette: {wette['einsatz']} Pkt. auf Platz {wette['tipp']}" if wette else " | ⏳ *Keine Wette*"
+        
+        # FEHLERBEHEBUNG: Sicheres Auslesen der Wette, falls das JS-Format abweicht
+        if wette and isinstance(wette, dict) and 'einsatz' in wette and 'tipp' in wette:
+            wette_text = f" | 🎲 Wette: {wette['einsatz']} Pkt. auf Platz {wette['tipp']}"
+        elif wette:
+            wette_text = f" | 🎲 Wette: Fehlerhaftes Format ({str(wette)})"
+        else:
+            wette_text = " | ⏳ *Keine Wette*"
+            
         st.write(f"- **{team}** ({global_state['points'][team]} Pkt.): {user_text}{wette_text}")
         
     st.write("---")
@@ -79,12 +86,12 @@ elif st.session_state.get("is_admin", False):
             results = {"Team 1": res_t1, "Team 2": res_t2, "Team 3": res_t3}
             for t in ["Team 1", "Team 2", "Team 3"]:
                 w = global_state["wetten"][t]
-                if w:
+                if w and isinstance(w, dict) and 'einsatz' in w and 'tipp' in w:
                     if w['tipp'] == results[t]:
                         global_state["points"][t] += w['einsatz']
                     else:
                         global_state["points"][t] -= w['einsatz']
-                global_state["wetten"][t] = None # Reset für nächste Runde
+                global_state["wetten"][t] = None 
             st.success("Auswertung abgeschlossen!")
             st.rerun()
     with col2:
@@ -103,16 +110,17 @@ else:
     
     st.subheader(f"Dashboard: {mein_name} ({mein_team})")
     
-    # Abfrage, ob Wette aus dem JS-Interface übergeben wurde
+    # Sicherstellen, dass empfangene Daten ein valides Dictionary sind
     if f"submitted_wette_{mein_team}" in st.session_state:
         wette_data = st.session_state[f"submitted_wette_{mein_team}"]
-        global_state["wetten"][mein_team] = wette_data
+        if wette_data and isinstance(wette_data, dict) and 'einsatz' in wette_data:
+            global_state["wetten"][mein_team] = wette_data
         del st.session_state[f"submitted_wette_{mein_team}"]
         st.rerun()
 
     aktuelle_wette = global_state["wetten"][mein_team]
     
-    if aktuelle_wette is not None:
+    if aktuelle_wette is not None and isinstance(aktuelle_wette, dict) and 'einsatz' in aktuelle_wette:
         st.info(f"Deine Wette steht: **{aktuelle_wette['einsatz']} Chips auf Platz {aktuelle_wette['tipp']}**. Warte auf die Auswertung...")
         if st.button("🔄 Ansicht aktualisieren"):
             st.rerun()
@@ -142,7 +150,6 @@ else:
             <div style="flex: 1; margin-left: 20px; background: #252525; padding: 15px; border-radius: 8px; text-align: center;">
                 <h4>Deine Chips ({aktuelle_punkte})</h4>
                 <div id="chip-bank" style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-height: 100px; border: 1px solid #444; padding: 10px; border-radius: 5px;">
-                    <!-- Chips werden via JS generiert -->
                 </div>
                 <button id="submit-btn" style="margin-top: 20px; width: 100%; background: #4caf50; color: white; border: none; padding: 10px; border-radius: 5px; cursor: pointer; font-weight: bold;">Wette bestätigen 🔒</button>
             </div>
@@ -153,7 +160,6 @@ else:
             const bank = document.getElementById('chip-bank');
             let gewetteterPlatz = null;
 
-            // Chips in der Bank erzeugen
             for(let i=1; i<=maxChips; i++) {{
                 const chip = document.createElement('div');
                 chip.className = 'chip';
@@ -168,7 +174,6 @@ else:
                 bank.appendChild(chip);
             }}
 
-            // Dropzonen einrichten (1., 2., 3. Platz & Bank)
             const zones = document.querySelectorAll('.dropzone, #chip-bank');
             zones.forEach(zone => {{
                 zone.addEventListener('dragover', (e) => e.preventDefault());
@@ -179,7 +184,6 @@ else:
                     
                     if (zone.id === 'chip-bank') {{
                         bank.appendChild(chip);
-                        // Prüfen, ob noch Chips auf Feldern liegen
                         let remaining = false;
                         document.querySelectorAll('.dropzone').forEach(dz => {{
                             if(dz.querySelector('.chip')) remaining = true;
@@ -188,16 +192,14 @@ else:
                     }} else {{
                         const targetPlatz = zone.getAttribute('data-platz');
                         
-                        // Logik: Liegen bereits Chips auf einem ANDEREN Platz?
                         if (gewetteterPlatz && gewetteterPlatz !== targetPlatz) {{
                             if (confirm("Möchtest du die Platzierung deiner Wette für alle Chips auf Platz " + targetPlatz + " ändern?")) {{
-                                // Alle bisher gesetzten Chips zum neuen Platz verschieben
                                 document.querySelectorAll('.dropzone .chip').forEach(c => {{
                                     zone.querySelector('.chip-container').appendChild(c);
                                 }});
                                 gewetteterPlatz = targetPlatz;
                             }} else {{
-                                return; // Aktion abbrechen
+                                return;
                             }}
                         }}
                         
@@ -207,7 +209,6 @@ else:
                 }});
             }});
 
-            // Wette abschicken
             document.getElementById('submit-btn').addEventListener('click', () => {{
                 let einsatz = 0;
                 document.querySelectorAll('.dropzone').forEach(dz => {{
@@ -222,7 +223,6 @@ else:
                     return;
                 }}
 
-                // Daten zurück an Streamlit senden via Query-Params-Trick
                 const state = {{einsatz: einsatz, tipp: parseInt(gewetteterPlatz)}};
                 window.parent.postMessage({{
                     type: 'streamlit:setComponentValue',
@@ -232,10 +232,8 @@ else:
         </script>
         """
         
-        # Rendert die interaktive JS-Komponente
         data = components.html(html_code, height=350)
         
-        # Abfangen des JS-Events im Streamlit-Backend
         if data:
             st.session_state[f"submitted_wette_{mein_team}"] = data
             st.rerun()
