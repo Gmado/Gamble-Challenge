@@ -65,7 +65,6 @@ elif st.session_state.get("is_admin", False):
         wette = global_state["wetten"][team]
         user_text = f"👤 Gambler: **{user}**" if user else "❌ *Niemand*"
         
-        # FEHLERBEHEBUNG: Sicheres Auslesen der Wette, falls das JS-Format abweicht
         if wette and isinstance(wette, dict) and 'einsatz' in wette and 'tipp' in wette:
             wette_text = f" | 🎲 Wette: {wette['einsatz']} Pkt. auf Platz {wette['tipp']}"
         elif wette:
@@ -94,13 +93,31 @@ elif st.session_state.get("is_admin", False):
                 global_state["wetten"][t] = None 
             st.success("Auswertung abgeschlossen!")
             st.rerun()
+            
     with col2:
-        if st.button("Lobby komplett zurücksetzen 🛑", use_container_width=True):
-            global_state["points"] = {"Team 1": 7, "Team 2": 7, "Team 3": 7}
-            global_state["wetten"] = {"Team 1": None, "Team 2": None, "Team 3": None}
-            global_state["taken_teams"] = {"Team 1": None, "Team 2": None, "Team 3": None}
-            st.session_state.clear()
-            st.rerun()
+        # Erster Klick setzt den Lösch-Status auf True
+        if st.button("🛑 Lobby löschen", use_container_width=True, type="primary"):
+            st.session_state["show_delete_confirm"] = True
+
+    # Wenn der Lösch-Status aktiv ist, blenden wir die Bestätigungsbox ein
+    if st.session_state.get("show_delete_confirm", False):
+        st.warning("⚠️ Bist du dir absolut sicher, dass du die Lobby löschen möchtest? Alle Punkte und angemeldeten Spieler gehen verloren.")
+        
+        conf_col1, conf_col2 = st.columns(2)
+        with conf_col1:
+            if st.button("Ja, unwiderruflich löschen", use_container_width=True):
+                # Globalen Speicher komplett auf Werkszustand zurücksetzen
+                global_state["points"] = {"Team 1": 7, "Team 2": 7, "Team 3": 7}
+                global_state["wetten"] = {"Team 1": None, "Team 2": None, "Team 3": None}
+                global_state["taken_teams"] = {"Team 1": None, "Team 2": None, "Team 3": None}
+                # Admin-Session aufräumen
+                st.session_state.clear()
+                st.success("Lobby wurde erfolgreich gelöscht!")
+                st.rerun()
+        with conf_col2:
+            if st.button("Abbrechen", use_container_width=True):
+                st.session_state["show_delete_confirm"] = False
+                st.rerun()
 
 # --- GAMBLER ANSICHT (MIT DRAG & DROP) ---
 else:
@@ -110,7 +127,6 @@ else:
     
     st.subheader(f"Dashboard: {mein_name} ({mein_team})")
     
-    # Sicherstellen, dass empfangene Daten ein valides Dictionary sind
     if f"submitted_wette_{mein_team}" in st.session_state:
         wette_data = st.session_state[f"submitted_wette_{mein_team}"]
         if wette_data and isinstance(wette_data, dict) and 'einsatz' in wette_data:
